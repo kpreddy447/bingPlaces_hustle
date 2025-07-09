@@ -11,3 +11,4 @@ google-generativeai
 pytesseract
 psycopg2-binary
 kaleido
+openpyxl
