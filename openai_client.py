@@ -72,13 +72,14 @@ You are an expert in API telemetry diagnostics.
 
 
 ### Image 1 (base64 PNG):
-{image1_b64[:200]}... (truncated)
+{image1_b64[:200]}
 
 ### Image 2 (base64 PNG):
-{image2_b64[:200]}... (truncated)
+{image2_b64[:200]}
 
 ### Output:
 | Period 1 timeline | Period 1 {status} Value |Period 2 timeline | Period 2 {status} Value | Difference | Observation |
+- get values from respective graphs provided to you or from the  dataframe shared to you for cross cheking.
 - list all the timelines in markdown
 - 3–5 bullet points explaining what might have caused the significant differences.
 - Don’t guess — infer only from data shown
