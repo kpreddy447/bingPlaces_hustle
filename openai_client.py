@@ -79,7 +79,7 @@ You are an expert in API telemetry diagnostics.
 
 ### Output:
 | Period 1 timeline | Period 1 {status} Value |Period 2 timeline | Period 2 {status} Value | Difference | Observation |
-- get values from respective graphs provided to you or from the  dataframe shared to you for cross cheking.
+- get values for each day from respective graphs provided to you and cross check by calculating total count of {status} value for those days from the dataframe shared to you.
 - list all the timelines in markdown
 - 3–5 bullet points explaining what might have caused the significant differences.
 - Don’t guess — infer only from data shown
