@@ -1,11 +1,10 @@
-# analysis.py
 from openai_client import compare_images, analyze_error_spread
 
 def analyze_graphs(image1_b64, image2_b64, status, start_date_1=None, end_date_1=None, start_date_2=None, end_date_2=None, df1=None, df2=None):
     try:
         summary = compare_images(
-            img1_b64=image1_b64,
-            img2_b64=image2_b64,
+            image1_b64=image1_b64,
+            image2_b64=image2_b64,
             df1=df1,
             df2=df2,
             status=status,
@@ -23,7 +22,6 @@ def analyze_error_hourly_spread(df, error_code, date, status):
         return analyze_error_spread(df, error_code, date, status)
     except Exception as e:
         return f"Error: {e}"
-
 
 
 # from openai_client import compare_images, analyze_error_spread
