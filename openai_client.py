@@ -1,3 +1,4 @@
+# openai_client.py
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 import os
@@ -20,7 +21,30 @@ def compare_images(img1_b64, img2_b64, df1, df2, status, start_date_1, end_date_
     df1_summary = summarize(df1)
     df2_summary = summarize(df2)
 
-    prompt = f"""..."""  # (keep your prompt as is)
+    prompt = f"""
+You are an expert in API telemetry diagnostics.
+
+### Visual Input:
+- Two charts showing `{status}` trends over two periods.
+
+### Tabular Data (grouped by service, endpoint, HTTP code):
+
+#### Period 1 ({start_date_1.date()} → {end_date_1.date()}):
+{df1_summary}
+
+#### Period 2 ({start_date_2.date()} → {end_date_2.date()}):
+{df2_summary}
+
+### Tasks:
+- Identify changes in `{status}` volume.
+- Spot error patterns or spike behavior.
+- Use only visible trends and counts (no assumptions).
+- List 3–5 diagnostics clearly and concisely.
+
+### Output:
+- Markdown table of counts
+- Bullet points of insights
+"""
 
     response = client.chat.completions.create(
         model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
@@ -30,21 +54,32 @@ def compare_images(img1_b64, img2_b64, df1, df2, status, start_date_1, end_date_
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img1_b64}" }},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img2_b64}" }}
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img1_b64}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img2_b64}"}}
                 ]
             }
         ],
         max_tokens=1500
     )
-
     return response.choices[0].message.content
 
 def analyze_error_spread(df, error_code, date, status):
     hourly_counts = df.groupby(df['timestamp'].dt.hour).size()
     hourly_str = "\n".join([f"{hour}: {count}" for hour, count in hourly_counts.items()])
 
-    prompt = f"""..."""  # keep the same prompt
+    prompt = f"""
+Analyze the hourly spread of error code {error_code} on {date}.
+
+### Hourly Breakdown:
+{hourly_str}
+
+Explain what this pattern might suggest. Focus on:
+- Peak times
+- Likely technical causes
+- Suggestions for ops/dev teams
+
+Use 2–3 clear bullet points.
+"""
 
     response = client.chat.completions.create(
         model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
@@ -55,7 +90,6 @@ def analyze_error_spread(df, error_code, date, status):
         max_tokens=800
     )
     return response.choices[0].message.content
-
 
 # from openai import AzureOpenAI
 # from dotenv import load_dotenv
