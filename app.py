@@ -1,12 +1,11 @@
-# === app.py ===
+# app.py
 import streamlit as st
 import pandas as pd
-from analysis import analyze_graphs, analyze_error_hourly_spread
-from importdata import load_data_from_csv
-import plotly.express as px
+import matplotlib.pyplot as plt
 import io
-import plotly.io as pio
 import base64
+from importdata import load_data_from_csv
+from analysis import analyze_graphs, analyze_error_hourly_spread
 
 st.set_page_config(layout="wide")
 st.title("📊 API Telemetry Diagnostics")
@@ -30,7 +29,7 @@ selected_endpoints = st.sidebar.multiselect("📍 Endpoint", sorted(endpoint_opt
 selected_regions = st.sidebar.multiselect("🌎 Region", sorted(region_options))
 status_toggle = st.radio("✅ Choose Status to Visualize", ["Success", "Failure"])
 
-# Date input for periods
+# Date input
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗓️ Period 1")
 start_date_1 = st.sidebar.date_input("Start Date 1")
@@ -60,37 +59,43 @@ if selected_regions:
 df1 = df[(df['timestamp'] >= start_date_1) & (df['timestamp'] < end_date_1)].copy()
 df2 = df[(df['timestamp'] >= start_date_2) & (df['timestamp'] < end_date_2)].copy()
 
-def plot_counts_by_day(df_filtered, status):
+def plot_counts(df_filtered, status, title):
     df_filtered = df_filtered[df_filtered['status'].str.lower() == status.lower()]
     df_filtered["date"] = df_filtered["timestamp"].dt.date
-    return df_filtered.groupby("date").size().reset_index(name="count")
+    grouped = df_filtered.groupby("date").size().reset_index(name="count")
 
-df1_chart = plot_counts_by_day(df1, status_toggle)
-df2_chart = plot_counts_by_day(df2, status_toggle)
-
-fig1 = px.line(df1_chart, x="date", y="count", title="Period 1", markers=True)
-fig2 = px.line(df2_chart, x="date", y="count", title="Period 2", markers=True)
-
-col1, col2 = st.columns(2)
-with col1:
-    st.plotly_chart(fig1, use_container_width=True)
-with col2:
-    st.plotly_chart(fig2, use_container_width=True)
+    fig, ax = plt.subplots()
+    ax.plot(grouped["date"], grouped["count"], marker='o')
+    ax.set_title(title)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Count")
+    ax.grid(True)
+    return fig
 
 def fig_to_base64(fig):
     buf = io.BytesIO()
-    pio.write_image(fig, buf, format='png')
+    fig.savefig(buf, format='png', bbox_inches='tight')
     buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return base64.b64encode(buf.read()).decode("utf-8")
 
-# GPT Compare
+# Draw plots
+fig1 = plot_counts(df1, status_toggle, "Period 1")
+fig2 = plot_counts(df2, status_toggle, "Period 2")
+
+col1, col2 = st.columns(2)
+with col1:
+    st.pyplot(fig1)
+with col2:
+    st.pyplot(fig2)
+
+# GPT Analysis Button
 if st.button("🧠 Analyze with LLM"):
     img1_b64 = fig_to_base64(fig1)
     img2_b64 = fig_to_base64(fig2)
     with st.spinner("Analyzing..."):
         result = analyze_graphs(
-            image1_path=img1_b64,
-            image2_path=img2_b64,
+            image1_b64=img1_b64,
+            image2_b64=img2_b64,
             status=status_toggle,
             start_date_1=start_date_1,
             end_date_1=end_date_1,
@@ -104,72 +109,6 @@ if st.button("🧠 Analyze with LLM"):
 if "llm_result" in st.session_state:
     st.markdown("### 🧠 LLM Summary")
     st.write(st.session_state["llm_result"])
-
-# Drilldown
-st.markdown("## 🔍 Single Day Error Comparison Drilldown")
-
-all_dates_1 = sorted(df1['timestamp'].dt.date.unique())
-all_dates_2 = sorted(df2['timestamp'].dt.date.unique())
-
-col1, col2 = st.columns(2)
-with col1:
-    selected_date_1 = st.selectbox("Select a date from Period 1", all_dates_1)
-with col2:
-    selected_date_2 = st.selectbox("Select a date from Period 2", all_dates_2)
-
-filt_df1 = df1[(df1['timestamp'].dt.date == selected_date_1) & (df1['status'].str.lower() == status_toggle.lower())]
-filt_df2 = df2[(df2['timestamp'].dt.date == selected_date_2) & (df2['status'].str.lower() == status_toggle.lower())]
-
-if filt_df1.empty or filt_df2.empty:
-    st.info("No matching data for selected dates.")
-else:
-    st.markdown(f"### 📊 Error Comparison: {selected_date_1} vs {selected_date_2}")
-    p1_counts = filt_df1['response_status_code'].value_counts()
-    p2_counts = filt_df2['response_status_code'].value_counts()
-    all_codes = sorted(set(p1_counts.index).union(set(p2_counts.index)))
-
-    comparison_data = []
-    for code in all_codes:
-        comparison_data.append({
-            "Error Code": code,
-            "Period 1 Count": p1_counts.get(code, 0),
-            "Period 2 Count": p2_counts.get(code, 0)
-        })
-    comparison_df = pd.DataFrame(comparison_data)
-    st.dataframe(comparison_df)
-
-    for row in comparison_df.itertuples():
-        with st.expander(f"🔎 Error {row._1} Comparison"):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                df1_hourly = filt_df1[filt_df1['response_status_code'] == row._1].copy()
-                df1_hourly['hour'] = df1_hourly['timestamp'].dt.hour
-                chart1 = px.bar(df1_hourly.groupby('hour').size().reset_index(name='count'), x='hour', y='count',
-                                title=f"{selected_date_1} Error {row._1}")
-                st.plotly_chart(chart1, use_container_width=True)
-                analysis_key = f"p1_{row._1}"
-                if st.button(f"🧠 Analyze {row._1} on {selected_date_1}", key=analysis_key):
-                    with st.spinner("Analyzing..."):
-                        result = analyze_error_hourly_spread(df1_hourly, row._1, selected_date_1, status_toggle)
-                        st.session_state["analysis_results"][analysis_key] = result
-                if analysis_key in st.session_state["analysis_results"]:
-                    st.write(st.session_state["analysis_results"][analysis_key])
-
-            with col2:
-                df2_hourly = filt_df2[filt_df2['response_status_code'] == row._1].copy()
-                df2_hourly['hour'] = df2_hourly['timestamp'].dt.hour
-                chart2 = px.bar(df2_hourly.groupby('hour').size().reset_index(name='count'), x='hour', y='count',
-                                title=f"{selected_date_2} Error {row._1}")
-                st.plotly_chart(chart2, use_container_width=True)
-                analysis_key = f"p2_{row._1}"
-                if st.button(f"🧠 Analyze {row._1} on {selected_date_2}", key=analysis_key):
-                    with st.spinner("Analyzing..."):
-                        result = analyze_error_hourly_spread(df2_hourly, row._1, selected_date_2, status_toggle)
-                        st.session_state["analysis_results"][analysis_key] = result
-                if analysis_key in st.session_state["analysis_results"]:
-                    st.write(st.session_state["analysis_results"][analysis_key])
-
 
 
 # # === app.py ===
